@@ -2,10 +2,11 @@
 Test for network_scanner
 """
 
+import contextlib
 from typing import List, Tuple, Optional, Any
 import logging
 import pytest  # pylint: disable=E0401
-from scapy.all import IP, TCP, UDP, DNS  # pylint: disable=E0611
+from scapy.all import IP, TCP, UDP, DNS  # pylint: disable=E0611,W0611
 from pre_matrix.reconnaissance.network_scanner import (
     syn_scan,
     dns_scan,
@@ -14,68 +15,32 @@ from pre_matrix.reconnaissance.network_scanner import (
 )
 
 
-# Mocking scapy's sr function to control its behavior during tests
+class CustomTestException(Exception):
+    """Custom exception class for testing purposes."""
+
+
 @pytest.fixture(autouse=True)
-def mock_sr_func(monkeypatch) -> None:
-    """Fixture to mock scapy's sr function for testing purposes.
+def configure_logging() -> None:
+    """Fixture to configure logging for the tests."""
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger("pre_matrix.reconnaissance.network_scanner")
+    logger.setLevel(logging.DEBUG)
+
+
+def mock_sr_global(_args: Any, _kwargs: Any) -> Tuple[List[Tuple[Any, Any]], List]:
+    """Mock function to simulate different network responses.
 
     Args:
-        monkeypatch (pytest.MonkeyPatch): The monkeypatch fixture.
+        _args: Positional arguments.
+        _kwargs: Keyword arguments.
+
+    Returns:
+        Tuple[List[Tuple[Any, Any]], List]: Mocked response packets.
     """
-
-    def mock_sr(*args: Any) -> Tuple[List[Tuple[Any, Any]], List]:
-        """Mock function to simulate different network responses.
-
-        Args:
-            *args: Positional arguments.
-
-        Returns:
-            Tuple[List[Tuple[Any, Any]], List]: Mocked response packets.
-        """
-        packet = args[0]
-        if packet.haslayer(TCP):
-            if 80 in packet[TCP].dport:
-                return (
-                    [
-                        (
-                            packet,
-                            IP(src=packet[IP].dst)
-                            / TCP(
-                                sport=packet[TCP].dport,
-                                dport=packet[TCP].sport,
-                                flags="SA",
-                            ),
-                        )
-                    ],
-                    [],
-                )
-            return ([], [])
-        if packet.haslayer(UDP):
-            if packet[UDP].dport == 53:
-                return (
-                    [
-                        (
-                            packet,
-                            IP(src=packet[IP].dst)
-                            / UDP(sport=packet[UDP].dport, dport=packet[UDP].sport)
-                            / DNS(
-                                id=packet[DNS].id,
-                                qr=1,
-                                qdcount=1,
-                                ancount=1,
-                                qd=packet[DNS].qd,
-                            ),
-                        )
-                    ],
-                    [],
-                )
-            return ([], [])
-        return ([], [])
-
-    monkeypatch.setattr("scapy.all.sr", mock_sr)
+    print("mock_sr_global called")  # Debug print
+    raise CustomTestException("Test Exception")
 
 
-# Test for syn_scan function
 @pytest.mark.parametrize(
     "target_host, ports, expected_info_log",
     [
@@ -103,7 +68,42 @@ def test_syn_scan(
     assert expected_info_log in caplog.text
 
 
-# Test for dns_scan function
+@pytest.mark.parametrize(
+    "target_host, exception_message",
+    [
+        ("192.168.1.1", "An error occurred during SYN scan: Test Exception"),
+    ],
+)
+def test_syn_scan_exception(
+    caplog: pytest.LogCaptureFixture,
+    target_host: str,
+    exception_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test the syn_scan function for exception handling.
+
+    Args:
+        caplog (pytest.LogCaptureFixture): Capture log fixture.
+        target_host (str): Target IP address.
+        exception_message (str): Expected exception log message.
+        monkeypatch (pytest.MonkeyPatch): The monkeypatch fixture.
+    """
+
+    def mock_sr_local(
+        *_args: Any, **_kwargs: Any
+    ) -> Tuple[List[Tuple[Any, Any]], List]:
+        print("mock_sr_local called")  # Debug print
+        raise CustomTestException("Test Exception")
+
+    monkeypatch.setattr("pre_matrix.reconnaissance.network_scanner.sr", mock_sr_local)
+
+    with caplog.at_level(logging.ERROR):  # Ensure ERROR level logging is captured
+        with contextlib.suppress(CustomTestException):
+            syn_scan(target_host)
+    # Ensure that the exception is logged
+    assert exception_message in caplog.text
+
+
 @pytest.mark.parametrize(
     "target_host, query, expected_info_log",
     [
@@ -127,11 +127,45 @@ def test_dns_scan(
     """
     with caplog.at_level(logging.DEBUG):  # Ensure DEBUG level logging is captured
         dns_scan(target_host, query)
-    print(caplog.text)  # Print the captured logs for debugging
     assert expected_info_log in caplog.text
 
 
-# Test for ip_range function
+@pytest.mark.parametrize(
+    "target_host, exception_message",
+    [
+        ("192.168.1.1", "An error occurred during DNS scan: Test Exception"),
+    ],
+)
+def test_dns_scan_exception(
+    caplog: pytest.LogCaptureFixture,
+    target_host: str,
+    exception_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test the dns_scan function for exception handling.
+
+    Args:
+        caplog (pytest.LogCaptureFixture): Capture log fixture.
+        target_host (str): Target IP address.
+        exception_message (str): Expected exception log message.
+        monkeypatch (pytest.MonkeyPatch): The monkeypatch fixture.
+    """
+
+    def mock_sr_local(
+        *_args: Any, **_kwargs: Any
+    ) -> Tuple[List[Tuple[Any, Any]], List]:
+        print("mock_sr_local called")  # Debug print
+        raise CustomTestException("Test Exception")
+
+    monkeypatch.setattr("pre_matrix.reconnaissance.network_scanner.sr", mock_sr_local)
+
+    with caplog.at_level(logging.ERROR):  # Ensure ERROR level logging is captured
+        with contextlib.suppress(CustomTestException):
+            dns_scan(target_host)
+    # Ensure that the exception is logged
+    assert exception_message in caplog.text
+
+
 @pytest.mark.parametrize(
     "start_ip, end_ip, expected_range",
     [
@@ -148,8 +182,7 @@ def test_dns_scan(
     ],
 )
 def test_ip_range(start_ip: str, end_ip: str, expected_range: List[str]) -> None:
-    """
-    Test the ip_range function.
+    """Test the ip_range function.
 
     Args:
         start_ip (str): Starting IP address.
@@ -160,7 +193,6 @@ def test_ip_range(start_ip: str, end_ip: str, expected_range: List[str]) -> None
     assert result == expected_range
 
 
-# Test for scan_ip_block function
 @pytest.mark.parametrize(
     "start_ip, end_ip, expected_logs",
     [
@@ -181,8 +213,7 @@ def test_scan_ip_block(
     end_ip: str,
     expected_logs: List[str],
 ) -> None:
-    """
-    Test the scan_ip_block function.
+    """Test the scan_ip_block function.
 
     Args:
         caplog (pytest.LogCaptureFixture): Capture log fixture.

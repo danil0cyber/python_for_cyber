@@ -19,3 +19,10 @@ venv.bak/
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# Ignore coverage
+htmlcov/
+.coverage
+
+# pytest cache directory
+.pytest_cache/

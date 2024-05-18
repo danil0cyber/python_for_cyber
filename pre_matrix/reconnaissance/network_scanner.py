@@ -9,7 +9,7 @@ from typing import List, Optional
 from scapy.all import sr, IP, TCP, UDP, DNS, DNSQR  # pylint: disable=E0611
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 DEFAULT_DNS_QUERY: str = "nmap.org"
@@ -33,11 +33,11 @@ def syn_scan(
     """
     if ports is None:
         # List of common ports to scan
-        # ftp, ssh, telnet, smtp, dns, http, https, smb, alternative http, apache tomcat, foundry
-        ports: List[int] = [21, 22, 23, 25, 53, 80, 443, 445, 8080, 8443, 30000]
+        ports = [21, 22, 23, 25, 53, 80, 443, 445, 8080, 8443, 30000]
 
     try:
         # Send SYN packets to the target host on specified ports
+        print("Calling sr in syn_scan")  # Debug print
         answered, _ = sr(
             IP(dst=target_host) / TCP(sport=5555, dport=ports, flags="S"),
             timeout=timeout,
@@ -50,6 +50,7 @@ def syn_scan(
                 logger.info(send_packet[TCP].dport)
     except Exception as e:  # pylint: disable=W0718
         logger.error("An error occurred during SYN scan: %s", e)
+        raise  # Ensure the exception propagates
 
 
 ## DNS SCAN ##
@@ -67,6 +68,7 @@ def dns_scan(
     """
     try:
         # Send a DNS query to the target host
+        print("Calling sr in dns_scan")  # Debug print
         answered, _ = sr(
             IP(dst=target_host)
             / UDP(sport=5555, dport=53)
@@ -81,6 +83,7 @@ def dns_scan(
                 logger.info("Received DNS response from %s", target_host)
     except Exception as e:  # pylint: disable=W0718
         logger.error("An error occurred during DNS scan: %s", e)
+        raise  # Ensure the exception propagates
 
 
 ## IP BLOCK SCAN ##
