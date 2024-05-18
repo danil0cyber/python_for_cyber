@@ -6,7 +6,7 @@ import contextlib
 from typing import List, Tuple, Optional, Any
 import logging
 import pytest  # pylint: disable=E0401
-from scapy.all import IP, TCP, UDP, DNS  # pylint: disable=E0611,W0611
+from scapy.all import IP, TCP, UDP, DNS, DNSQR, DNSRR  # pylint: disable=E0611
 from pre_matrix.reconnaissance.network_scanner import (
     syn_scan,
     dns_scan,
@@ -27,18 +27,47 @@ def configure_logging() -> None:
     logger.setLevel(logging.DEBUG)
 
 
-def mock_sr_global(_args: Any, _kwargs: Any) -> Tuple[List[Tuple[Any, Any]], List]:
-    """Mock function to simulate different network responses.
+def mock_sr_syn_scan(*_args: Any, **_kwargs: Any) -> Tuple[List[Tuple[Any, Any]], List]:
+    """Mock function to simulate SYN scan responses.
 
     Args:
-        _args: Positional arguments.
-        _kwargs: Keyword arguments.
+        *_args: Positional arguments.
+        *_kwargs: Keyword arguments.
 
     Returns:
         Tuple[List[Tuple[Any, Any]], List]: Mocked response packets.
     """
-    print("mock_sr_global called")  # Debug print
-    raise CustomTestException("Test Exception")
+    pkt_sent = IP(dst="192.168.1.1") / TCP(sport=5555, dport=80, flags="S")
+    pkt_received = IP(src="192.168.1.1") / TCP(sport=80, dport=5555, flags="SA")
+    return [((pkt_sent, pkt_received))], []
+
+
+def mock_sr_dns_scan(*_args: Any, **_kwargs: Any) -> Tuple[List[Tuple[Any, Any]], List]:
+    """Mock function to simulate DNS scan responses.
+
+    Args:
+        *_args: Positional arguments.
+        *_kwargs: Keyword arguments.
+
+    Returns:
+        Tuple[List[Tuple[Any, Any]], List]: Mocked response packets.
+    """
+    pkt_sent = (
+        IP(dst="192.168.1.1")
+        / UDP(sport=5555, dport=53)
+        / DNS(rd=1, qd=DNSQR(qname="example.com"))
+    )
+    pkt_received = (
+        IP(src="192.168.1.1")
+        / UDP(sport=53, dport=5555)
+        / DNS(
+            rd=1,
+            qr=1,
+            qd=DNSQR(qname="example.com"),
+            an=DNSRR(rrname="example.com", ttl=10),
+        )
+    )
+    return [((pkt_sent, pkt_received))], []
 
 
 @pytest.mark.parametrize(
@@ -54,6 +83,7 @@ def test_syn_scan(
     target_host: str,
     ports: Optional[List[int]],
     expected_info_log: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test the syn_scan function.
 
@@ -62,10 +92,15 @@ def test_syn_scan(
         target_host (str): Target IP address.
         ports (Optional[List[int]]): List of ports to scan.
         expected_info_log (str): Expected log message.
+        monkeypatch (pytest.MonkeyPatch): The monkeypatch fixture.
     """
+    monkeypatch.setattr(
+        "pre_matrix.reconnaissance.network_scanner.sr", mock_sr_syn_scan
+    )
     with caplog.at_level(logging.INFO):  # Ensure INFO level logging is captured
         syn_scan(target_host, ports)
     assert expected_info_log in caplog.text
+    assert "80" in caplog.text  # Ensure that the specific port is logged
 
 
 @pytest.mark.parametrize(
@@ -116,6 +151,7 @@ def test_dns_scan(
     target_host: str,
     query: str,
     expected_info_log: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test the dns_scan function.
 
@@ -124,10 +160,17 @@ def test_dns_scan(
         target_host (str): Target IP address.
         query (str): DNS query name.
         expected_info_log (str): Expected log message.
+        monkeypatch (pytest.MonkeyPatch): The monkeypatch fixture.
     """
+    monkeypatch.setattr(
+        "pre_matrix.reconnaissance.network_scanner.sr", mock_sr_dns_scan
+    )
     with caplog.at_level(logging.DEBUG):  # Ensure DEBUG level logging is captured
         dns_scan(target_host, query)
     assert expected_info_log in caplog.text
+    assert (
+        "Received DNS response from" in caplog.text
+    )  # Ensure the DNS response is logged
 
 
 @pytest.mark.parametrize(
