@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_DNS_QUERY: str = "nmap.org"
 
 
+## SYN SCAN ##
 def syn_scan(
     target_host: str,
     ports: Optional[List[int]] = None,
@@ -51,6 +52,7 @@ def syn_scan(
         logger.error("An error occurred during SYN scan: %s", e)
 
 
+## DNS SCAN ##
 def dns_scan(
     target_host: str, query: str = DEFAULT_DNS_QUERY, verbose: int = 0, timeout: int = 5
 ) -> None:
@@ -81,6 +83,7 @@ def dns_scan(
         logger.error("An error occurred during DNS scan: %s", e)
 
 
+## IP BLOCK SCAN ##
 def ip_range(start_ip: str, end_ip: str) -> List[str]:
     """
     Generate a list of IP addresses between start_ip and end_ip, inclusive.
@@ -144,4 +147,4 @@ if __name__ == "__main__":
     # Perform scans on the local network IP range
     target_start_ip: str = "192.168.1.1"
     target_end_ip: str = "192.168.1.10"  # Example local IP range
-    # scan_ip_block(target_start_ip, target_end_ip)
+    scan_ip_block(target_start_ip, target_end_ip)
