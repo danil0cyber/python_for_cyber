@@ -37,7 +37,6 @@ def syn_scan(
 
     try:
         # Send SYN packets to the target host on specified ports
-        print("Calling sr in syn_scan")  # Debug print
         answered, _ = sr(
             IP(dst=target_host) / TCP(sport=5555, dport=ports, flags="S"),
             timeout=timeout,
@@ -68,7 +67,6 @@ def dns_scan(
     """
     try:
         # Send a DNS query to the target host
-        print("Calling sr in dns_scan")  # Debug print
         answered, _ = sr(
             IP(dst=target_host)
             / UDP(sport=5555, dport=53)

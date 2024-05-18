@@ -127,7 +127,6 @@ def test_syn_scan_exception(
     def mock_sr_local(
         *_args: Any, **_kwargs: Any
     ) -> Tuple[List[Tuple[Any, Any]], List]:
-        print("mock_sr_local called")  # Debug print
         raise CustomTestException("Test Exception")
 
     monkeypatch.setattr("pre_matrix.reconnaissance.network_scanner.sr", mock_sr_local)
@@ -197,7 +196,6 @@ def test_dns_scan_exception(
     def mock_sr_local(
         *_args: Any, **_kwargs: Any
     ) -> Tuple[List[Tuple[Any, Any]], List]:
-        print("mock_sr_local called")  # Debug print
         raise CustomTestException("Test Exception")
 
     monkeypatch.setattr("pre_matrix.reconnaissance.network_scanner.sr", mock_sr_local)
